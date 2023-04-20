@@ -41,8 +41,10 @@ func GetClanByTag(clanTag string) (*Clan, error) {
 	if err != nil {
 		return nil, err
 	}
-	clan := new(Clan)
-	err = json.Unmarshal(body, &clan)
-	return clan, nil
-
+	if resp.StatusCode == http.StatusOK {
+		clan := new(Clan)
+		err = json.Unmarshal(body, &clan)
+		return clan, nil
+	}
+	return nil, nil
 }

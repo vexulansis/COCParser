@@ -7,13 +7,15 @@ import (
 	"os"
 
 	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 )
 
 type Storage struct {
 	DB *sql.DB
 }
 
-func NewStorage(db *sql.DB) *Storage {
+func NewStorage() *Storage {
+	db := ConnectDB()
 	return &Storage{
 		DB: db,
 	}
@@ -38,6 +40,7 @@ func ConnectDB() *sql.DB {
 	DBURI := GetDBURI()
 	DB, err := sql.Open("postgres", DBURI)
 	if err != nil {
+		fmt.Printf("err: %v\n", err)
 		log.Fatal()
 	}
 	return DB
