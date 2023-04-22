@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -41,10 +42,14 @@ func GetClanByTag(clanTag string) (*Clan, error) {
 	if err != nil {
 		return nil, err
 	}
+	fmt.Printf("resp.StatusCode: %v\n", resp.StatusCode)
 	if resp.StatusCode == http.StatusOK {
 		clan := new(Clan)
 		err = json.Unmarshal(body, &clan)
 		return clan, nil
+	} else {
+		clientErr := new(ClientError)
+		err = json.Unmarshal(body, &clientErr)
 	}
 	return nil, nil
 }
