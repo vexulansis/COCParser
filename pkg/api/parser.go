@@ -2,17 +2,15 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
-	"os"
 
 	"github.com/joho/godotenv"
 )
 
 var apiURLprefix = "https://api.clashofclans.com/v1/clans/%23"
 
-func defaultRequest(URL string) (*http.Request, error) {
+func defaultRequest(URL string, token string) (*http.Request, error) {
 	req, err := http.NewRequest("GET", URL, nil)
 	if err != nil {
 		return nil, err
@@ -21,15 +19,13 @@ func defaultRequest(URL string) (*http.Request, error) {
 	if err != nil {
 		return nil, err
 	}
-	token := os.Getenv("API_TOKEN")
-	bearer := "Bearer " + token
-	req.Header.Set("Authorization", bearer)
+	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Add("Accept", "application/json")
 	return req, nil
 }
-func GetClanByTag(clanTag string) (*Clan, error) {
+func GetClanByTag(clanTag string, token string) (*Clan, error) {
 	reqURL := apiURLprefix + clanTag
-	req, err := defaultRequest(reqURL)
+	req, err := defaultRequest(reqURL, token)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +38,6 @@ func GetClanByTag(clanTag string) (*Clan, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("resp.StatusCode: %v\n", resp.StatusCode)
 	if resp.StatusCode == http.StatusOK {
 		clan := new(Clan)
 		err = json.Unmarshal(body, &clan)

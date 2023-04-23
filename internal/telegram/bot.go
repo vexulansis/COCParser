@@ -1,11 +1,9 @@
 package tg
 
 import (
-	"log"
 	"os"
 
 	"github.com/joho/godotenv"
-	"github.com/vexulansis/COCParser/pkg/api"
 )
 
 type TGBot struct {
@@ -41,14 +39,6 @@ func (b *TGBot) Start() error {
 func (b *TGBot) Respond(u *Update) error {
 	msg := new(BotMessage)
 	msg.Chat_id = u.Message.Chat.Chat_id
-	clan, err := api.GetClanByTag(u.Message.Text)
-	if err != nil {
-		log.Fatal()
-	}
-	msg.Text = clan.Name
-	_, err = b.sendMessage(msg)
-	if err != nil {
-		return err
-	}
+
 	return nil
 }

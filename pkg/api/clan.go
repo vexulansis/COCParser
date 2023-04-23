@@ -4,6 +4,7 @@ type RestResponse struct {
 	Clan Clan `json:"clan"`
 }
 type Clan struct {
+	ID                     int
 	Tag                    string `json:"tag"`
 	Name                   string `json:"name"`
 	Type                   string `json:"type"`
