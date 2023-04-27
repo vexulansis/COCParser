@@ -23,28 +23,28 @@ func defaultRequest(URL string, token string) (*http.Request, error) {
 	req.Header.Add("Accept", "application/json")
 	return req, nil
 }
-func GetClanByTag(clanTag string, token string) (*Clan, error) {
+func GetClanByTag(clanTag string, token string) (*Clan, *http.Response, error) {
 	reqURL := apiURLprefix + clanTag
 	req, err := defaultRequest(reqURL, token)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if resp.StatusCode == http.StatusOK {
 		clan := new(Clan)
 		err = json.Unmarshal(body, &clan)
-		return clan, nil
+		return clan, resp, nil
 	} else {
 		clientErr := new(ClientError)
 		err = json.Unmarshal(body, &clientErr)
 	}
-	return nil, nil
+	return nil, resp, nil
 }
