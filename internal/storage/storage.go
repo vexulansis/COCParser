@@ -3,14 +3,15 @@ package storage
 import (
 	"database/sql"
 	"fmt"
-	"log"
 
 	"github.com/BurntSushi/toml"
 	_ "github.com/lib/pq"
+	"github.com/sirupsen/logrus"
 )
 
 type Storage struct {
 	Config DBConfig
+	Logger *logrus.Logger
 	DB     *sql.DB
 }
 type DBConfig struct {
@@ -24,14 +25,20 @@ type DBConfig struct {
 
 func NewStorage() (*Storage, error) {
 	s := new(Storage)
+	// Custom logrus logger
+	logger := initLogger()
+	s.Logger = logger
+	// Get DB info from .toml
 	_, err := toml.DecodeFile("db.toml", &s.Config)
 	if err != nil {
-		log.Fatal()
+		s.Logger.Fatal(err)
 	}
+	// Create DB URI
 	DBURI := s.URI()
+	// Open DB
 	DB, err := sql.Open("postgres", DBURI)
 	if err != nil {
-		log.Fatal()
+		s.Logger.Fatal(err)
 	}
 	s.DB = DB
 	return s, nil

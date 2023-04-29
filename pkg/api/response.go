@@ -1,16 +1,13 @@
 package api
 
 type LoginResponse struct {
-	Status                  Status `json:"status"`
-	SessionExpiresInSeconds int    `json:"sessionExpiresInSeconds"`
-	TemporaryAPIToken       string `json:"temporaryAPIToken"`
-	SwaggerURL              string `json:"swaggerUrl"`
+	Status            Status `json:"status"`
+	TemporaryAPIToken string `json:"temporaryAPIToken"`
 }
 
 type KeyResponse struct {
-	Status                  Status `json:"status"`
-	SessionExpiresInSeconds int    `json:"sessionExpiresInSeconds"`
-	Keys                    []Key  `json:"keys,omitempty"`
+	Status Status `json:"status"`
+	Keys   []Key  `json:"keys,omitempty"`
 }
 type Status struct {
 	Code    int    `json:"code,omitempty"`

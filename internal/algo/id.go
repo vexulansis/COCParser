@@ -2,10 +2,10 @@ package algo
 
 var Ref = "0289PYLQGRJCUV"
 
-func getIDFromLH(low int, high int) int {
+func GetIDFromLH(low int, high int) int {
 	return (low << 8) + high
 }
-func getTagFromID(id int) string {
+func GetTagFromID(id int) string {
 	var index int
 	var tag string
 	size := len(Ref)

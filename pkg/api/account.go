@@ -3,17 +3,13 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
-	"net/http"
-
-	"github.com/go-resty/resty/v2"
 )
 
 // URL data can be found in url.go
 // Query strings can be found in query.go
 type APIAccount struct {
 	Credentials Credentials
-	Response    LoginResponse
+	Token       string
 	Keys        []Key
 }
 type Credentials struct {
@@ -35,11 +31,13 @@ type Key struct {
 
 func getAccounts(db *sql.DB) ([]*APIAccount, error) {
 	accounts := []*APIAccount{}
+	// Rows: email, password
 	rows, err := db.Query(getAccountsQuery)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+	// Iterating through rows, creating new accounts using credentials
 	for rows.Next() {
 		cred := Credentials{}
 		err := rows.Scan(&cred.Email, &cred.Password)
@@ -53,35 +51,46 @@ func getAccounts(db *sql.DB) ([]*APIAccount, error) {
 	}
 	return accounts, nil
 }
-func (a *APIAccount) login(client *resty.Client) error {
+func (a *APIAccount) login(client *APIClient) error {
+	// Sending http request
 	credBody, err := json.Marshal(a.Credentials)
-	resp, err := client.R().
+	resp, err := client.Client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(credBody).
-		Post(BaseUrl + LoginEndpoint)
+		Post(BaseURL + LoginEndpoint)
 	if err != nil {
 		return err
 	}
-	if resp.StatusCode() != http.StatusOK {
-		fmt.Printf("%d\n", resp.StatusCode())
+	// Logging http response
+	hf := HTTPFields{
+		Source:   "APIClient",
+		Method:   "GET",
+		Endpoint: LoginEndpoint,
 	}
-	err = json.Unmarshal(resp.Body(), &a.Response)
+	client.HTTPLogger.Do(hf, resp)
+	logresp := new(LoginResponse)
+	err = json.Unmarshal(resp.Body(), &logresp)
 	if err != nil {
 		return err
 	}
+	a.Token = logresp.TemporaryAPIToken
 	return nil
 }
-func (a *APIAccount) getKeys(client *resty.Client) error {
-	resp, err := client.R().
+func (a *APIAccount) getKeys(client *APIClient) error {
+	resp, err := client.Client.R().
 		SetHeader("Content-Type", "application/json").
-		SetAuthToken(a.Response.TemporaryAPIToken).
-		Post(BaseUrl + KeyListEndpoint)
+		SetAuthToken(a.Token).
+		Post(BaseURL + KeyListEndpoint)
 	if err != nil {
 		return err
 	}
-	if resp.StatusCode() != http.StatusOK {
-		fmt.Printf("%d\n", resp.StatusCode())
+	// Logging http response
+	hf := HTTPFields{
+		Source:   "APIClient",
+		Method:   "POST",
+		Endpoint: KeyListEndpoint,
 	}
+	client.HTTPLogger.Do(hf, resp)
 	keyresp := new(KeyResponse)
 	err = json.Unmarshal(resp.Body(), &keyresp)
 	if err != nil {
