@@ -1,8 +1,8 @@
 package storage
 
 type APIAccount struct {
-	ID          int
 	Credentials Credentials
+	ID          int
 }
 type Credentials struct {
 	Email    string `json:"email"`

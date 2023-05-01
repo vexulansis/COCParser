@@ -23,7 +23,9 @@ func (b *TGBot) getUpdates(offset int) ([]Update, error) {
 		return nil, err
 	}
 	restResp := new(RestResponse)
-	err = json.Unmarshal(body, &restResp)
+	if err = json.Unmarshal(body, &restResp); err != nil {
+		return nil, err
+	}
 	return restResp.Result, nil
 }
 

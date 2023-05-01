@@ -10,19 +10,19 @@ import (
 )
 
 type Storage struct {
-	Config DBConfig
 	Logger *logrus.Logger
 	DB     *sql.DB
+	Config DBConfig
 }
 type DBConfig struct {
-	ServerPort  int
 	Host        string
-	Port        int
 	User        string
 	Password    string
 	Name        string
 	APIemail    string
 	APIpassword string
+	ServerPort  int
+	Port        int
 }
 
 func NewStorage() (*Storage, error) {

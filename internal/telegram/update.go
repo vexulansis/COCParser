@@ -6,6 +6,6 @@ type RestResponse struct {
 
 // https://core.telegram.org/bots/api#update
 type Update struct {
-	Update_id int     `json:"update_id"`
 	Message   Message `json:"message"`
+	Update_id int     `json:"update_id"`
 }

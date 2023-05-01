@@ -14,8 +14,6 @@ import (
 )
 
 type Worker struct {
-	ID       int
-	Key      string
 	Client   *resty.Client
 	Logger   *HTTPLogger
 	Mutex    *sync.Mutex
@@ -24,6 +22,8 @@ type Worker struct {
 	WG       *sync.WaitGroup
 	Status   chan int
 	Output   chan error
+	Key      string
+	ID       int
 }
 type TagChunk struct {
 	Tags []string
@@ -49,8 +49,8 @@ func NewWorker(key string, id int) *Worker {
 // pseudo
 func (w *Worker) Execute() {
 	defer w.WG.Done()
-	var tagChunk *TagChunk
-	var clanChunk *ClanChunk
+	tagChunk := new(TagChunk)
+	clanChunk := new(ClanChunk)
 	// Getting tags from TagPool
 	tagMsg, err := w.TagPool.ReadMessage(context.Background())
 	if err != nil {
@@ -67,6 +67,7 @@ func (w *Worker) Execute() {
 		// Prevent rate limit
 		time.Sleep(time.Millisecond * 15)
 		clanChunk.Clans = append(clanChunk.Clans, clan)
+
 	}
 	// Marshalling clans
 	clanMsg, err := json.Marshal(clanChunk)
@@ -74,11 +75,13 @@ func (w *Worker) Execute() {
 		w.Output <- err
 	}
 	// Sending clans to ClanPool
-	w.ClanPool.WriteMessages(context.Background(),
+	if err := w.ClanPool.WriteMessages(context.Background(),
 		kafka.Message{
 			Key:   []byte(strconv.Itoa(w.ID)),
 			Value: clanMsg,
-		})
+		}); err != nil {
+		w.Output <- err
+	}
 }
 func (w *Worker) GetClanByTag(tag string) *Clan {
 	// Making http request
@@ -100,7 +103,9 @@ func (w *Worker) GetClanByTag(tag string) *Clan {
 	switch resp.StatusCode() {
 	case http.StatusOK:
 		clan := new(Clan)
-		json.Unmarshal(resp.Body(), &clan)
+		if err := json.Unmarshal(resp.Body(), &clan); err != nil {
+			w.Output <- err
+		}
 		return clan
 	}
 	return nil

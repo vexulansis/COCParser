@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-resty/resty/v2"
 	"github.com/sirupsen/logrus"
+
 	"github.com/vexulansis/COCParser/internal/storage"
 )
 
@@ -14,10 +15,10 @@ type APIClient struct {
 	HTTPLogger  *HTTPLogger
 	Mutex       *sync.Mutex
 	WG          *sync.WaitGroup
+	IP          string
+	Accounts    []*APIAccount
 	CurrentAcc  int
 	CurrentSize int
-	Accounts    []*APIAccount
-	IP          string
 }
 
 func NewClient(DBClient *storage.DBClient) (*APIClient, error) {
@@ -69,8 +70,11 @@ func (c *APIClient) GetKeys() error {
 		c.CurrentAcc--
 		c.Mutex.Unlock()
 		go func() {
-			c.Accounts[acc].login(c)
-			c.Accounts[acc].getKeys(c)
+			if c.Accounts[acc].login(c) == nil {
+				if err := c.Accounts[acc].getKeys(c); err != nil {
+					c.Logger.Error(err)
+				}
+			}
 			c.WG.Done()
 		}()
 	}
@@ -80,15 +84,23 @@ func (c *APIClient) GetKeys() error {
 
 func (c *APIClient) FillKeys() error {
 	for _, acc := range c.Accounts {
-		acc.login(c)
-		acc.FillKeys(c)
+		if err := acc.login(c); err != nil {
+			return err
+		}
+		if err := acc.FillKeys(c); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 func (c *APIClient) SanitizeKeys() error {
 	for _, acc := range c.Accounts {
-		acc.login(c)
-		acc.SanitizeKeys(c)
+		if err := acc.login(c); err != nil {
+			return err
+		}
+		if err := acc.SanitizeKeys(c); err != nil {
+			return err
+		}
 	}
 	return nil
 }

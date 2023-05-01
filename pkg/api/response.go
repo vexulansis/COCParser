@@ -1,8 +1,8 @@
 package api
 
 type LoginResponse struct {
-	Status            Status `json:"status"`
 	TemporaryAPIToken string `json:"temporaryAPIToken"`
+	Status            Status `json:"status"`
 }
 
 type KeyResponse struct {
@@ -10,7 +10,7 @@ type KeyResponse struct {
 	Keys   []Key  `json:"keys,omitempty"`
 }
 type Status struct {
-	Code    int    `json:"code,omitempty"`
-	Message string `json:"message,omitempty"`
 	Detail  any    `json:"detail"`
+	Message string `json:"message,omitempty"`
+	Code    int    `json:"code,omitempty"`
 }

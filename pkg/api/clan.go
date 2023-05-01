@@ -4,21 +4,21 @@ type RestResponse struct {
 	Clan Clan `json:"clan"`
 }
 type Clan struct {
-	ID                     int
+	Description            string `json:"description"`
 	Tag                    string `json:"tag"`
 	Name                   string `json:"name"`
 	Type                   string `json:"type"`
-	Description            string `json:"description"`
+	RequiredTrophies       int    `json:"requiredTrophies"`
 	ClanLevel              int    `json:"clanLevel"`
 	ClanPoints             int    `json:"clanPoints"`
 	ClanVersusPoints       int    `json:"clanVersusPoints"`
-	RequiredTrophies       int    `json:"requiredTrophies"`
-	WarWinStreak           int    `json:"warWinStreak"`
-	WarWins                int    `json:"warWins"`
-	WarTies                int    `json:"warTies"`
-	WarLosses              int    `json:"warLosses"`
-	IsWarLogPublic         bool   `json:"isWarLogPublic"`
-	Members                int    `json:"members"`
-	RequiredVersusTrophies int    `json:"requiredVersusTrophies"`
-	RequiredTownhallLevel  int    `json:"requiredTownhallLevel"`
+	ID                     int
+	WarWinStreak           int  `json:"warWinStreak"`
+	WarWins                int  `json:"warWins"`
+	WarTies                int  `json:"warTies"`
+	WarLosses              int  `json:"warLosses"`
+	Members                int  `json:"members"`
+	RequiredVersusTrophies int  `json:"requiredVersusTrophies"`
+	RequiredTownhallLevel  int  `json:"requiredTownhallLevel"`
+	IsWarLogPublic         bool `json:"isWarLogPublic"`
 }
