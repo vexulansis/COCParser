@@ -10,31 +10,31 @@ import (
 // URL data can be found in url.go
 // Query strings can be found in query.go
 type APIAccount struct {
-	ID          int
-	Credentials Credentials
 	Logger      *HTTPLogger
-	Token       string
 	Mutex       *sync.Mutex
 	WG          *sync.WaitGroup
+	Credentials Credentials
+	Token       string
+	Keys        []Key
+	ID          int
 	CurrentKey  int
 	CurrentSize int
-	Keys        []Key
 }
 type Credentials struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 type Key struct {
+	Origins     any      `json:"origins"`
+	ValidUntil  any      `json:"validUntil"`
 	ID          string   `json:"id"`
 	Developerid string   `json:"developerId"`
 	Tier        string   `json:"tier"`
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
-	Origins     any      `json:"origins"`
+	Key         string   `json:"key"`
 	Scopes      []string `json:"scopes"`
 	Cidrranges  []string `json:"cidrRanges"`
-	ValidUntil  any      `json:"validUntil"`
-	Key         string   `json:"key"`
 }
 
 func (a *APIAccount) login(client *APIClient) error {
@@ -164,7 +164,9 @@ func (a *APIAccount) FillKeys(client *APIClient) error {
 	a.CurrentSize = len(a.Keys)
 	a.CurrentKey = a.CurrentSize
 	for i := a.CurrentSize; i < 10; i++ {
-		a.createKey(client)
+		if err := a.createKey(client); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -172,7 +174,9 @@ func (a *APIAccount) SanitizeKeys(client *APIClient) error {
 	a.CurrentSize = len(a.Keys)
 	a.CurrentKey = a.CurrentSize - 1
 	for i := 0; i < a.CurrentSize; i++ {
-		a.revokeKey(client)
+		if err := a.revokeKey(client); err != nil {
+			return err
+		}
 	}
 	return nil
 }

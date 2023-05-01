@@ -29,8 +29,7 @@ func (b *TGBot) Start() error {
 		}
 		for _, update := range updates {
 			offset = update.Update_id + 1
-			b.Respond(&update)
-			if err != nil {
+			if err := b.Respond(&update); err != nil {
 				return err
 			}
 		}

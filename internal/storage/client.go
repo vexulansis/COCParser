@@ -57,6 +57,5 @@ func (c *DBClient) GenerateAccounts(n int) error {
 			return err
 		}
 	}
-	c.getAccounts()
-	return nil
+	return c.getAccounts()
 }
