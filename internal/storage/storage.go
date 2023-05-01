@@ -15,12 +15,14 @@ type Storage struct {
 	DB     *sql.DB
 }
 type DBConfig struct {
-	ServerPort int
-	Host       string
-	Port       int
-	User       string
-	Password   string
-	Name       string
+	ServerPort  int
+	Host        string
+	Port        int
+	User        string
+	Password    string
+	Name        string
+	APIemail    string
+	APIpassword string
 }
 
 func NewStorage() (*Storage, error) {

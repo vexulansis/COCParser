@@ -1,39 +1,45 @@
 package api
 
 import (
+	"sync"
+
 	"github.com/go-resty/resty/v2"
 	"github.com/sirupsen/logrus"
-	db "github.com/vexulansis/COCParser/internal/storage"
+	"github.com/vexulansis/COCParser/internal/storage"
 )
 
 type APIClient struct {
-	Client     *resty.Client
-	Logger     *logrus.Logger
-	HTTPLogger *HTTPLogger
-	Accounts   []*APIAccount
-	IP         string
+	Client      *resty.Client
+	Logger      *logrus.Logger
+	HTTPLogger  *HTTPLogger
+	Mutex       *sync.Mutex
+	WG          *sync.WaitGroup
+	CurrentAcc  int
+	CurrentSize int
+	Accounts    []*APIAccount
+	IP          string
 }
 
-func NewClient(storage *db.Storage) (*APIClient, error) {
+func NewClient(DBClient *storage.DBClient) (*APIClient, error) {
 	client := new(APIClient)
 	// Default resty client
 	client.Client = resty.New()
 	// Custom loggers
-	client.Logger = initLogger()
 	client.HTTPLogger = initHTTPLogger()
 	// Filling IP field
 	err := client.getIP()
 	if err != nil {
 		return nil, err
 	}
+	// Creating Mutex
+	client.Mutex = &sync.Mutex{}
+	// Creating WaitGroup
+	client.WG = &sync.WaitGroup{}
 	// Getting accounts from DB
-	accounts, err := getAccounts(storage.DB)
-	if err != nil {
-		return nil, err
-	}
-	client.Accounts = accounts
+	client.Accounts = convertAccounts(DBClient.APIAccounts)
+	client.CurrentSize = len(client.Accounts)
 	// Getting keys from COC API
-	err = client.getKeys()
+	err = client.GetKeys()
 	if err != nil {
 		return nil, err
 	}
@@ -48,40 +54,42 @@ func (c *APIClient) getIP() error {
 	hf := HTTPFields{
 		Source:   "APIClient",
 		Method:   "POST",
-		Endpoint: KeyListEndpoint,
+		Endpoint: IPURL,
 	}
 	c.HTTPLogger.Do(hf, resp)
 	c.IP = string(resp.Body())
 	return nil
 }
-func (c *APIClient) getKeys() error {
-	for _, a := range c.Accounts {
-		err := a.login(c)
-		if err != nil {
-			return err
-		}
-		err = a.getKeys(c)
-		if err != nil {
-			return err
-		}
+func (c *APIClient) GetKeys() error {
+	c.WG.Add(c.CurrentSize)
+	c.CurrentAcc = c.CurrentSize - 1
+	for i := 0; i < c.CurrentSize; i++ {
+		c.Mutex.Lock()
+		acc := c.CurrentAcc
+		c.CurrentAcc--
+		c.Mutex.Unlock()
+		go func() {
+			c.Accounts[acc].login(c)
+			c.Accounts[acc].getKeys(c)
+			c.WG.Done()
+		}()
+	}
+	c.WG.Wait()
+	return nil
+}
+
+func (c *APIClient) FillKeys() error {
+	for _, acc := range c.Accounts {
+		acc.login(c)
+		acc.FillKeys(c)
 	}
 	return nil
 }
-func (c *APIClient) GetClanByTag(tag string, key string) error {
-	resp, err := c.Client.R().
-		SetHeader("Content-Type", "application/json").
-		SetAuthToken(key).
-		Get(APIURL + ClansEndpoint + "/%23" + tag)
-	if err != nil {
-		return err
+func (c *APIClient) SanitizeKeys() error {
+	for _, acc := range c.Accounts {
+		acc.login(c)
+		acc.SanitizeKeys(c)
 	}
-	// Logging http response
-	hf := HTTPFields{
-		Source:   "APIClient",
-		Method:   "GET",
-		Endpoint: ClansEndpoint,
-	}
-	c.HTTPLogger.Do(hf, resp)
 	return nil
 }
 func (c *APIClient) CreateKeyPool() []string {
@@ -92,4 +100,16 @@ func (c *APIClient) CreateKeyPool() []string {
 		}
 	}
 	return keys
+}
+func convertAccounts(accounts []*storage.APIAccount) []*APIAccount {
+	conv := []*APIAccount{}
+	for _, a := range accounts {
+		c := new(APIAccount)
+		c.ID = a.ID
+		c.Credentials = Credentials(a.Credentials)
+		c.WG = &sync.WaitGroup{}
+		c.Mutex = &sync.Mutex{}
+		conv = append(conv, c)
+	}
+	return conv
 }

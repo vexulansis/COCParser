@@ -1,15 +1,23 @@
 package api
 
 import (
-	"database/sql"
 	"encoding/json"
+	"fmt"
+	"sync"
+	"time"
 )
 
 // URL data can be found in url.go
 // Query strings can be found in query.go
 type APIAccount struct {
+	ID          int
 	Credentials Credentials
+	Logger      *HTTPLogger
 	Token       string
+	Mutex       *sync.Mutex
+	WG          *sync.WaitGroup
+	CurrentKey  int
+	CurrentSize int
 	Keys        []Key
 }
 type Credentials struct {
@@ -29,31 +37,12 @@ type Key struct {
 	Key         string   `json:"key"`
 }
 
-func getAccounts(db *sql.DB) ([]*APIAccount, error) {
-	accounts := []*APIAccount{}
-	// Rows: email, password
-	rows, err := db.Query(getAccountsQuery)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	// Iterating through rows, creating new accounts using credentials
-	for rows.Next() {
-		cred := Credentials{}
-		err := rows.Scan(&cred.Email, &cred.Password)
-		if err != nil {
-			return nil, err
-		}
-		acc := &APIAccount{
-			Credentials: cred,
-		}
-		accounts = append(accounts, acc)
-	}
-	return accounts, nil
-}
 func (a *APIAccount) login(client *APIClient) error {
 	// Sending http request
 	credBody, err := json.Marshal(a.Credentials)
+	if err != nil {
+		return err
+	}
 	resp, err := client.Client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(credBody).
@@ -63,7 +52,7 @@ func (a *APIAccount) login(client *APIClient) error {
 	}
 	// Logging http response
 	hf := HTTPFields{
-		Source:   "APIClient",
+		Source:   fmt.Sprintf("APIAccount#%d", a.ID),
 		Method:   "GET",
 		Endpoint: LoginEndpoint,
 	}
@@ -73,10 +62,13 @@ func (a *APIAccount) login(client *APIClient) error {
 	if err != nil {
 		return err
 	}
+	a.Mutex.Lock()
 	a.Token = logresp.TemporaryAPIToken
+	a.Mutex.Unlock()
 	return nil
 }
 func (a *APIAccount) getKeys(client *APIClient) error {
+	// Sending http request
 	resp, err := client.Client.R().
 		SetHeader("Content-Type", "application/json").
 		SetAuthToken(a.Token).
@@ -86,7 +78,7 @@ func (a *APIAccount) getKeys(client *APIClient) error {
 	}
 	// Logging http response
 	hf := HTTPFields{
-		Source:   "APIClient",
+		Source:   fmt.Sprintf("APIAccount#%d", a.ID),
 		Method:   "POST",
 		Endpoint: KeyListEndpoint,
 	}
@@ -96,6 +88,91 @@ func (a *APIAccount) getKeys(client *APIClient) error {
 	if err != nil {
 		return err
 	}
+	a.Mutex.Lock()
 	a.Keys = keyresp.Keys
+	a.CurrentSize = len(a.Keys)
+	a.Mutex.Unlock()
+	return nil
+}
+func (a *APIAccount) createKey(client *APIClient) error {
+	keyindex := a.CurrentKey
+	token := a.Token
+	a.CurrentKey++
+	// Sending http request
+	key := new(Key)
+	key.Name = fmt.Sprintf("KEY_%d", keyindex)
+	key.Description = fmt.Sprintf("Created on %s", time.Now().Format(time.UnixDate))
+	key.Cidrranges = []string{client.IP}
+	a.Keys = append(a.Keys, *key)
+	keyBody, err := json.Marshal(key)
+	if err != nil {
+		return err
+	}
+	resp, err := client.Client.R().
+		SetHeader("Content-Type", "application/json").
+		SetAuthToken(token).
+		SetBody(keyBody).
+		Post(BaseURL + CreateKeyEndpoint)
+	if err != nil {
+		return err
+	}
+	// Logging http response
+	hf := HTTPFields{
+		Source:   fmt.Sprintf("APIAccount#%d", a.ID),
+		Method:   "POST",
+		Endpoint: CreateKeyEndpoint,
+	}
+	client.HTTPLogger.Do(hf, resp)
+	keyresp := new(KeyResponse)
+	err = json.Unmarshal(resp.Body(), &keyresp)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+func (a *APIAccount) revokeKey(client *APIClient) error {
+	key := a.Keys[a.CurrentKey]
+	a.CurrentKey--
+	// Sending http request
+	revokeBody, err := json.Marshal(key)
+	if err != nil {
+		return err
+	}
+	resp, err := client.Client.R().
+		SetHeader("Content-Type", "application/json").
+		SetAuthToken(a.Token).
+		SetBody(revokeBody).
+		Post(BaseURL + RevokeKeyEndpoint)
+	if err != nil {
+		return err
+	}
+	// Logging http response
+	hf := HTTPFields{
+		Source:   fmt.Sprintf("APIAccount#%d", a.ID),
+		Method:   "POST",
+		Endpoint: RevokeKeyEndpoint,
+	}
+	client.HTTPLogger.Do(hf, resp)
+	keyresp := new(KeyResponse)
+	err = json.Unmarshal(resp.Body(), &keyresp)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+func (a *APIAccount) FillKeys(client *APIClient) error {
+	a.CurrentSize = len(a.Keys)
+	a.CurrentKey = a.CurrentSize
+	for i := a.CurrentSize; i < 10; i++ {
+		a.createKey(client)
+	}
+	return nil
+}
+func (a *APIAccount) SanitizeKeys(client *APIClient) error {
+	a.CurrentSize = len(a.Keys)
+	a.CurrentKey = a.CurrentSize - 1
+	for i := 0; i < a.CurrentSize; i++ {
+		a.revokeKey(client)
+	}
 	return nil
 }
