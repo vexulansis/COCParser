@@ -17,7 +17,7 @@ func NewWorker(ID int, pool *Pool) *Worker {
 }
 func (w *Worker) Start() {
 	f := DBLoggerFields{
-		Source:      fmt.Sprintf("WORKER#%d", w.ID),
+		Source:      fmt.Sprintf("DBWORKER#%d", w.ID),
 		Method:      "START",
 		Subject:     "<---",
 		Destination: "TASKCHANNEL",
@@ -26,7 +26,6 @@ func (w *Worker) Start() {
 	for {
 		select {
 		case task := <-w.Pool.DC.TaskChan:
-			w.Pool.WG.Add(1)
 			err := w.Process(task)
 			if err != nil {
 
@@ -45,7 +44,7 @@ func (w *Worker) Process(task *Task) error {
 			return err
 		}
 		f := DBLoggerFields{
-			Source:      fmt.Sprintf("WORKER#%d", w.ID),
+			Source:      fmt.Sprintf("DBWORKER#%d", w.ID),
 			Method:      "INSERT",
 			Subject:     t.Email,
 			Destination: "credentials",
