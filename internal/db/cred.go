@@ -11,7 +11,7 @@ type Credentials struct {
 	Password string
 }
 
-func GenerateCredentials(n int, wp *WorkerPool) error {
+func GenerateCredentials(n int, DC *DBClient) error {
 	credExample := &Credentials{}
 	_, err := toml.DecodeFile("cred.toml", &credExample)
 	if err != nil {
@@ -22,17 +22,18 @@ func GenerateCredentials(n int, wp *WorkerPool) error {
 			Email:    fmt.Sprintf(credExample.Email, i),
 			Password: credExample.Password,
 		}
-		task := &InsertCredTask{
-			Credentials: cred,
-			WG:          wp.WG,
+		task := &Task{
+			ID:   i,
+			Data: cred,
 		}
-		wp.Tasks <- task
+		DC.TaskChan <- task
 		f := DBLoggerFields{
-			Source:  "GENERATOR",
-			Method:  "SEND",
-			Subject: "TASK",
+			Source:      "GENERATOR",
+			Method:      "SEND",
+			Subject:     fmt.Sprintf("TASK#%d", task.ID),
+			Destination: "TASKCHANNEL",
 		}
-		wp.DC.Logger.Print(f, 0)
+		DC.Logger.Print(f, 0)
 	}
 	return nil
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/vexulansis/COCParser/internal/cluster"
 	"github.com/vexulansis/COCParser/internal/db"
@@ -10,7 +11,6 @@ import (
 )
 
 func main() {
-
 	DC, err := db.NewClient()
 	if err != nil {
 		log.Fatal()
@@ -23,12 +23,16 @@ func main() {
 	if err != nil {
 		log.Fatal()
 	}
+	n := 1000
 	fmt.Println(DC, AC, CC)
-	wp := db.NewWorkerPool(10, 100, DC)
-	wp.Start()
-	err = db.GenerateCredentials(100, wp)
+	start := time.Now()
+	pool := db.NewPool(5, DC)
+	pool.Start()
+	err = db.GenerateCredentials(n, DC)
 	if err != nil {
 		fmt.Printf("err: %v\n", err)
 	}
-	wp.Stop()
+	pool.WG.Wait()
+	total := time.Since(start)
+	fmt.Printf("Time to execute %d queries: %s", n, total)
 }
