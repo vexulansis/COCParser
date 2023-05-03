@@ -9,27 +9,121 @@ import (
 type Worker struct {
 	ID    int
 	Token string
-	AC    *APIClient
+	Pool  *Pool
+	Quit  chan bool
 }
 
-func NewWorker(id int, ac *APIClient) *Worker {
+func NewWorker(ID int, pool *Pool) *Worker {
 	return &Worker{
-		ID: id,
-		AC: ac,
+		ID:   ID,
+		Pool: pool,
+		Quit: make(chan bool),
 	}
 }
-func (w *Worker) getClans(AC *APIClient) {
-	for tag := range w.AC.TagChan {
-		clan, err := w.getClanByTag(tag, AC)
-		if err != nil {
-			w.AC.ErrorChan <- err
+func (w *Worker) Start() {
+	// f := APILoggerFields{
+	// 	Source:      fmt.Sprintf("APIWORKER#%d", w.ID),
+	// 	Method:      "START",
+	// 	Subject:     "<---",
+	// 	Destination: "TASKCHANNEL",
+	// }
+	// w.Pool.AC.Logger.Print(f, 0)
+
+	for {
+		select {
+		case task := <-w.Pool.AC.TaskChan:
+			w.Process(task)
+		case <-w.Quit:
+			return
 		}
-		w.AC.ClanChan <- clan
 	}
 }
-func (w *Worker) getClanByTag(tag string, AC *APIClient) (*Clan, error) {
+func (w *Worker) Process(task *Task) error {
+	defer w.Pool.WG.Done()
+	switch t := task.Data.(type) {
+	case *Account:
+		w.login(t)
+		w.getKeys(t)
+	case string:
+		w.getClanByTag(t)
+	}
+	return nil
+}
+func (w *Worker) Stop() {
+	f := APILoggerFields{
+		Source:      fmt.Sprintf("APIWORKER#%d", w.ID),
+		Method:      "STOP",
+		Subject:     "<---",
+		Destination: "TASKCHANNEL",
+	}
+	w.Pool.AC.Logger.Print(f, 0)
+	go func() {
+		w.Quit <- true
+	}()
+}
+func (w *Worker) login(a *Account) error {
+	// Sending http request
+	body, err := json.Marshal(a)
+	if err != nil {
+		return err
+	}
+	resp, err := w.Pool.AC.Client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(body).
+		Post(BaseURL + LoginEndpoint)
+	if err != nil {
+		return err
+	}
+	// Logging http response
+	f := APILoggerFields{
+		Source:      fmt.Sprintf("APIWORKER#%d", w.ID),
+		Method:      "POST",
+		Subject:     a.Email,
+		Destination: LoginEndpoint,
+	}
+	w.Pool.AC.Logger.Print(f, resp)
+	logresp := &LoginResponse{}
+	err = json.Unmarshal(resp.Body(), &logresp)
+	if err != nil {
+		return err
+	}
+	// Mutex lock for stability
+	w.Pool.AC.Mutex.Lock()
+	a.Token = logresp.TemporaryAPIToken
+	w.Pool.AC.Mutex.Unlock()
+	return nil
+
+}
+func (w *Worker) getKeys(a *Account) error {
+	// Sending http request
+	resp, err := w.Pool.AC.Client.R().
+		SetHeader("Content-Type", "application/json").
+		SetAuthToken(a.Token).
+		Post(BaseURL + KeyListEndpoint)
+	if err != nil {
+		return err
+	}
+	// Logging http response
+	f := APILoggerFields{
+		Source:      fmt.Sprintf("APIWORKER#%d", w.ID),
+		Method:      "POST",
+		Subject:     a.Email,
+		Destination: KeyListEndpoint,
+	}
+	w.Pool.AC.Logger.Print(f, resp)
+	keyresp := &KeyResponse{}
+	err = json.Unmarshal(resp.Body(), &keyresp)
+	if err != nil {
+		return err
+	}
+	w.Pool.AC.Mutex.Lock()
+	a.Keys = keyresp.Keys
+	w.Pool.AC.Mutex.Unlock()
+	return nil
+}
+func (w *Worker) getClanByTag(tag string) (*Clan, error) {
 	// Making http request
-	resp, err := w.AC.Client.R().
+	resp, err := w.Pool.AC.Client.R().
 		SetHeader("Content-Type", "application/json").
 		SetAuthToken(w.Token).
 		Get(APIURL + ClansEndpoint + "/%23" + tag)
@@ -37,12 +131,13 @@ func (w *Worker) getClanByTag(tag string, AC *APIClient) (*Clan, error) {
 		return nil, err
 	}
 	// Logging http response
-	f := APILoggerFields{
-		Source:   fmt.Sprintf("Worker#%d", w.ID),
-		Method:   "POST",
-		Endpoint: ClansEndpoint,
-	}
-	AC.Logger.Print(f, resp)
+	// f := APILoggerFields{
+	// 	Source:      fmt.Sprintf("APIWORKER#%d", w.ID),
+	// 	Method:      "POST",
+	// 	Subject:     "#" + tag,
+	// 	Destination: ClansEndpoint,
+	// }
+	// w.Pool.AC.Logger.Print(f, resp)
 	if resp.StatusCode() == http.StatusOK {
 		clan := &Clan{}
 		json.Unmarshal(resp.Body(), &clan)

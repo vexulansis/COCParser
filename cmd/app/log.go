@@ -1,27 +1,25 @@
-package api
+package main
 
 import (
-	"fmt"
 	"os"
 
 	formatter "github.com/antonfisher/nested-logrus-formatter"
-	"github.com/go-resty/resty/v2"
 	"github.com/sirupsen/logrus"
 )
 
-type APILogger struct {
+type MainLogger struct {
 	Logger *logrus.Logger
 }
-type APILoggerFields struct {
+type MainLoggerFields struct {
 	Source      string
 	Method      string
 	Subject     string
 	Destination string
 }
 
-// Example: [WORKER] [GET] [KEY] [/api/apikey/list] ..
-func initAPILogger() *APILogger {
-	apiLogger := &APILogger{}
+// Example: [WORKER] [INSERT] [DATA] [CLANS] ..
+func InitMainLogger() *MainLogger {
+	mainLogger := &MainLogger{}
 	logger := logrus.New()
 	logger.SetOutput(os.Stdout)
 	logger.SetLevel(logrus.DebugLevel)
@@ -32,22 +30,12 @@ func initAPILogger() *APILogger {
 		ShowFullLevel:   true,
 		HideKeys:        true,
 	})
-	apiLogger.Logger = logger
-	return apiLogger
+	mainLogger.Logger = logger
+	return mainLogger
 }
-func (l *APILogger) Print(f APILoggerFields, data any) {
+func (l *MainLogger) Print(f MainLoggerFields, data any) {
 	fields := convertFields(f)
 	switch extra := data.(type) {
-	case *resty.Response:
-		logstr := fmt.Sprintf("Status Code: %d", extra.StatusCode())
-		switch {
-		case extra.StatusCode() < 300:
-			l.Logger.WithFields(fields).Info(logstr)
-		case extra.StatusCode() >= 400:
-			l.Logger.WithFields(fields).Error(logstr)
-		default:
-			l.Logger.WithFields(fields).Warn(logstr)
-		}
 	case int:
 		l.Logger.WithFields(fields).Info()
 	case string:
@@ -55,9 +43,12 @@ func (l *APILogger) Print(f APILoggerFields, data any) {
 	case error:
 		l.Logger.WithFields(fields).Error(extra)
 	}
-
 }
-func convertFields(f APILoggerFields) logrus.Fields {
+func (l *MainLogger) Fatal(f MainLoggerFields, data any) {
+	fields := convertFields(f)
+	l.Logger.WithFields(fields).Fatal(data)
+}
+func convertFields(f MainLoggerFields) logrus.Fields {
 	fields := make(logrus.Fields)
 	if len(f.Source) > 0 {
 		fields["source"] = f.Source

@@ -1,7 +1,6 @@
 package db
 
 import (
-	"fmt"
 	"sync"
 )
 
@@ -21,12 +20,16 @@ func NewPool(size int, DC *DBClient) *Pool {
 	for i := 0; i < size; i++ {
 		w := NewWorker(i, pool)
 		pool.Workers = append(pool.Workers, w)
-		fmt.Printf("w: %v\n", w)
 	}
 	return pool
 }
 func (p *Pool) Start() {
 	for _, w := range p.Workers {
 		go w.Start()
+	}
+}
+func (p *Pool) Stop() {
+	for _, w := range p.Workers {
+		go w.Stop()
 	}
 }

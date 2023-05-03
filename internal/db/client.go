@@ -1,6 +1,8 @@
 package db
 
-import "database/sql"
+import (
+	"database/sql"
+)
 
 type DBClient struct {
 	Logger    *DBLogger
@@ -25,4 +27,28 @@ func NewClient() (*DBClient, error) {
 	// Creating error channel
 	dbClient.ErrorChan = make(chan error)
 	return dbClient, nil
+}
+func (c *DBClient) GetCredentials() ([]Credentials, error) {
+	credentials := []Credentials{}
+	rows, err := c.DB.Query("select * from credentials")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		cred := Credentials{}
+		err := rows.Scan(&cred.Email, &cred.Password)
+		if err != nil {
+			return nil, err
+		}
+		credentials = append(credentials, cred)
+	}
+	f := DBLoggerFields{
+		Source:      "DBCLIENT",
+		Method:      "SELECT",
+		Subject:     "*",
+		Destination: "credentials",
+	}
+	c.Logger.Print(f, 0)
+	return credentials, nil
 }

@@ -35,9 +35,9 @@ func initDBLogger() *DBLogger {
 	dbLogger.Logger = logger
 	return dbLogger
 }
-func (l *DBLogger) Print(f DBLoggerFields, extra interface{}) {
+func (l *DBLogger) Print(f DBLoggerFields, data any) {
 	fields := convertFields(f)
-	switch extra := extra.(type) {
+	switch extra := data.(type) {
 	case sql.Result:
 		rows, err := extra.RowsAffected()
 		if err != nil {

@@ -1,22 +1,27 @@
 package api
 
 import (
+	"sync"
+
 	"github.com/go-resty/resty/v2"
 )
 
 type APIClient struct {
-	Logger    *APILogger
-	Client    *resty.Client
-	IP        string
-	TagChan   chan string
-	ClanChan  chan *Clan
-	ErrorChan chan error
+	Logger      *APILogger
+	Client      *resty.Client
+	Mutex       *sync.Mutex
+	AccountPool []*Account
+	KeyPool     []Key
+	IP          string
+	TaskChan    chan *Task
+	ErrorChan   chan error
 }
 
 func NewClient() (*APIClient, error) {
 	// Creating AC example
 	apiClient := &APIClient{
 		Client: resty.New(),
+		Mutex:  &sync.Mutex{},
 	}
 	// Initializing logger
 	apiClient.Logger = initAPILogger()
@@ -25,10 +30,8 @@ func NewClient() (*APIClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Creating tag channel
-	apiClient.TagChan = make(chan string)
-	// Creating clan channel
-	apiClient.ClanChan = make(chan *Clan)
+	// Creating error channel
+	apiClient.TaskChan = make(chan *Task)
 	// Creating error channel
 	apiClient.ErrorChan = make(chan error)
 	return apiClient, nil
@@ -41,11 +44,24 @@ func (c *APIClient) getIP() error {
 	}
 	// Logging http response
 	f := APILoggerFields{
-		Source:   "APIClient",
-		Method:   "POST",
-		Endpoint: IPURL,
+		Source:      "APICLIENT",
+		Method:      "POST",
+		Destination: IPURL,
 	}
 	c.Logger.Print(f, resp)
 	c.IP = string(resp.Body())
 	return nil
+}
+func (c *APIClient) CreateKeyPool() {
+	for _, a := range c.AccountPool {
+		for _, k := range a.Keys {
+			c.KeyPool = append(c.KeyPool, k)
+		}
+	}
+	f := APILoggerFields{
+		Source:  "APICLIENT",
+		Method:  "CREATE",
+		Subject: "KEYPOOL",
+	}
+	c.Logger.Print(f, 0)
 }
