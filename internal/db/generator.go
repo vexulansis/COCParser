@@ -2,33 +2,57 @@ package db
 
 import (
 	"fmt"
-
-	"github.com/BurntSushi/toml"
+	"sync"
+	"time"
 )
 
-func GenerateCredentials(n int, DC *DBClient) error {
-	credExample := &Credentials{}
-	_, err := toml.DecodeFile("cred.toml", &credExample)
-	if err != nil {
-		return err
+type Generator struct {
+	Manager *GeneratorManager
+	WG      *sync.WaitGroup
+	Output  chan<- *Task
+}
+type Reserved struct {
+	Total    int
+	Email    string
+	Password string
+}
+
+func NewGenerator(taskChan chan<- *Task) *Generator {
+	m := initGeneratorManager()
+	return &Generator{
+		Manager: m,
+		WG:      &sync.WaitGroup{},
+		Output:  taskChan,
 	}
-	for i := 1; i <= n; i++ {
-		cred := Credentials{
-			Email:    fmt.Sprintf(credExample.Email, i),
-			Password: credExample.Password,
-		}
-		task := &Task{
-			ID:   i,
-			Data: cred,
-		}
-		DC.TaskChan <- task
-		// f := DBLoggerFields{
-		// 	Source:      "GENERATOR",
-		// 	Method:      "SEND",
-		// 	Subject:     fmt.Sprintf("TASK#%d", task.ID),
-		// 	Destination: "TASKCHANNEL",
-		// }
-		// DC.Logger.Print(f, 0)
+}
+func (g *Generator) GenerateReserved(reserved *Reserved) {
+	for id := 0; id < reserved.Total; id++ {
+		g.WG.Add(1)
+		go func(id int, output chan<- *Task) {
+			defer g.WG.Done()
+			// Creating account example
+			acc := &Account{
+				ID: id,
+				Credentials: Credentials{
+					Email:    fmt.Sprintf(reserved.Email, id),
+					Password: reserved.Password,
+				},
+			}
+			// Creating task
+			task := &Task{
+				ID:   id,
+				Type: "INSERT",
+				Data: acc,
+			}
+			// Sending task
+			output <- task
+			// Counting tasks
+			g.Manager.Mutex.Lock()
+			g.Manager.TasksGenerated++
+			g.Manager.Mutex.Unlock()
+		}(id, g.Output)
 	}
-	return nil
+	g.Manager.ShutdownTime = time.Now()
+	g.WG.Wait()
+	close(g.Output)
 }

@@ -1,7 +1,5 @@
 package db
 
-import "fmt"
-
 type Worker struct {
 	ID   int
 	Pool *Pool
@@ -16,51 +14,29 @@ func NewWorker(ID int, pool *Pool) *Worker {
 	}
 }
 func (w *Worker) Start() {
-	f := DBLoggerFields{
-		Source:      fmt.Sprintf("DBWORKER#%d", w.ID),
-		Method:      "START",
-		Subject:     "<---",
-		Destination: "TASKCHANNEL",
-	}
-	w.Pool.DC.Logger.Print(f, 0)
 	for {
 		select {
-		case task := <-w.Pool.DC.TaskChan:
-			err := w.Process(task)
-			if err != nil {
-
-			}
+		case task := <-w.Pool.Input:
+			w.Pool.Manager.Mutex.Lock()
+			w.Pool.Manager.TasksReceived++
+			w.Pool.Manager.Mutex.Unlock()
+			w.Process(task)
 		case <-w.Quit:
 			return
 		}
 	}
 }
-func (w *Worker) Process(task *Task) error {
+func (w *Worker) Process(task *Task) {
 	defer w.Pool.WG.Done()
-	switch t := task.Data.(type) {
-	case Credentials:
-		res, err := w.Pool.DC.DB.Exec("insert into credentials(email,password) values ($1,$2)", t.Email, t.Password)
-		if err != nil {
-			return err
-		}
-		f := DBLoggerFields{
-			Source:      fmt.Sprintf("DBWORKER#%d", w.ID),
-			Method:      "INSERT",
-			Subject:     t.Email,
-			Destination: "credentials",
-		}
-		w.Pool.DC.Logger.Print(f, res)
+	switch task.Type {
+	case "TEST":
+
 	}
-	return nil
+	w.Pool.Manager.Mutex.Lock()
+	w.Pool.Manager.TasksProcessed++
+	w.Pool.Manager.Mutex.Unlock()
 }
 func (w *Worker) Stop() {
-	f := DBLoggerFields{
-		Source:      fmt.Sprintf("WORKER#%d", w.ID),
-		Method:      "STOP",
-		Subject:     "<---",
-		Destination: "TASKCHANNEL",
-	}
-	w.Pool.DC.Logger.Print(f, 0)
 	go func() {
 		w.Quit <- true
 	}()

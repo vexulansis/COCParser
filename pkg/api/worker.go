@@ -131,13 +131,13 @@ func (w *Worker) getClanByTag(tag string) (*Clan, error) {
 		return nil, err
 	}
 	// Logging http response
-	// f := APILoggerFields{
-	// 	Source:      fmt.Sprintf("APIWORKER#%d", w.ID),
-	// 	Method:      "POST",
-	// 	Subject:     "#" + tag,
-	// 	Destination: ClansEndpoint,
-	// }
-	// w.Pool.AC.Logger.Print(f, resp)
+	f := APILoggerFields{
+		Source:      fmt.Sprintf("APIWORKER#%d", w.ID),
+		Method:      "POST",
+		Subject:     "#" + tag,
+		Destination: ClansEndpoint,
+	}
+	w.Pool.AC.Logger.Print(f, resp)
 	if resp.StatusCode() == http.StatusOK {
 		clan := &Clan{}
 		json.Unmarshal(resp.Body(), &clan)

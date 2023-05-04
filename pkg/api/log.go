@@ -29,7 +29,7 @@ func initAPILogger() *APILogger {
 		FieldsOrder:     []string{"source", "method", "subject", "destination"},
 		TimestampFormat: "2006-01-02 15:04:05",
 		NoColors:        false,
-		ShowFullLevel:   true,
+		ShowFullLevel:   false,
 		HideKeys:        true,
 	})
 	apiLogger.Logger = logger
