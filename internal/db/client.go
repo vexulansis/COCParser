@@ -2,53 +2,37 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
+
+	_ "github.com/lib/pq"
 )
 
 type DBClient struct {
-	Logger    *DBLogger
-	DB        *sql.DB
-	TaskChan  chan *Task
-	ErrorChan chan error
+	DB     *sql.DB
+	Config DBConfig
+}
+type DBConfig struct {
+	Host     string
+	User     string
+	Password string
+	Name     string
+	Port     int
 }
 
-func NewClient() (*DBClient, error) {
-	// Creating DC example
-	dbClient := &DBClient{}
-	// Initializing logger
-	dbClient.Logger = initDBLogger()
-	// Getting DB
-	db, err := getDB()
+func getDB(config DBConfig) (*sql.DB, error) {
+	DBURI := getURI(config)
+	db, err := sql.Open("postgres", DBURI)
 	if err != nil {
 		return nil, err
 	}
-	dbClient.DB = db
-	// Creating task channel
-	dbClient.TaskChan = make(chan *Task)
-	// Creating error channel
-	dbClient.ErrorChan = make(chan error)
-	return dbClient, nil
+	return db, nil
 }
-func (c *DBClient) GetCredentials() ([]Credentials, error) {
-	credentials := []Credentials{}
-	rows, err := c.DB.Query("select * from credentials")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		cred := Credentials{}
-		err := rows.Scan(&cred.Email, &cred.Password)
-		if err != nil {
-			return nil, err
-		}
-		credentials = append(credentials, cred)
-	}
-	f := DBLoggerFields{
-		Source:      "DBCLIENT",
-		Method:      "SELECT",
-		Subject:     "*",
-		Destination: "credentials",
-	}
-	c.Logger.Print(f, 0)
-	return credentials, nil
+func getURI(config DBConfig) string {
+	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+		config.Host,
+		config.Port,
+		config.User,
+		config.Password,
+		config.Name,
+	)
 }

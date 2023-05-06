@@ -1,6 +1,7 @@
-package api
+package pool
 
 type Account struct {
+	ID       int
 	Email    string `json:"email"`
 	Password string `json:"password"`
 	Token    string

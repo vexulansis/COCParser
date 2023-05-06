@@ -1,4 +1,4 @@
-package api
+package pool
 
 type Clan struct {
 	ID                     int

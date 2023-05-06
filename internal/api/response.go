@@ -1,5 +1,7 @@
 package api
 
+import . "github.com/vexulansis/COCParser/pkg/pool"
+
 type LoginResponse struct {
 	Status            Status `json:"status"`
 	TemporaryAPIToken string `json:"temporaryAPIToken"`
