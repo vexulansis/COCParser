@@ -38,9 +38,10 @@ type Pool struct {
 // New Pool example, call Prepare() before Start()
 func NewPool(name string, size int) *Pool {
 	pool := &Pool{
-		Name: name,
-		Size: size,
-		WG:   &sync.WaitGroup{},
+		Name:    name,
+		Size:    size,
+		WG:      &sync.WaitGroup{},
+		Workers: []*Worker{},
 		Input: &Conn{
 			Channel: make(chan []byte),
 		},
@@ -58,15 +59,26 @@ func NewPool(name string, size int) *Pool {
 // Initializing Manager, connecting to Broker, creating Workers
 func (p *Pool) Prepare(broker *Broker) {
 	// Initializing Manager
-	p.Manager = NewPoolManager()
+	p.Manager = NewPoolManager(p.Name)
 	// Connecting to Broker
 	p.Input.Port = broker.ConnectOutput(p.Input.Channel)
 	p.Output.Port = broker.ConnectInput(p.Output.Channel)
+	p.Errors.Port = broker.ConnectError(p.Errors.Channel)
 	// Creating workers
 	for id := 0; id < p.Size; id++ {
 		w := NewWorker(id, p)
 		p.Workers = append(p.Workers, w)
 	}
+}
+
+// Connects DB if its necessary
+func (p *Pool) ConnectDB(db *sql.DB) {
+	p.DB = db
+}
+
+// Connects http.Client if its necessary
+func (p *Pool) ConnectHTTP(client *resty.Client) {
+	p.Client = client
 }
 
 // Starts operating and benchmarking
@@ -81,7 +93,7 @@ func (p *Pool) Start() {
 func (p *Pool) Stop() {
 	p.Manager.Time.End = time.Now()
 	for _, w := range p.Workers {
-		go w.Stop()
+		w.Stop()
 	}
 }
 

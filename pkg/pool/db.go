@@ -1,38 +1,27 @@
 package pool
 
-import "errors"
+import (
+	"encoding/json"
+	"errors"
+)
 
 // Switch between possible task types
 func (w *Worker) Query(task Message) error {
 	switch task.Type {
-	case "INSERT":
-		w.QueryInsert(task.Data)
+	case "INSERTACCOUNT":
+		acc := &Account{}
+		a, err := json.Marshal(task.Data)
+		if err != nil {
+			return err
+		}
+		json.Unmarshal(a, acc)
+		_, err = w.Pool.DB.Exec(InsertAccountQuery, acc.ID, acc.Email, acc.Password)
+		if err != nil {
+			return err
+		}
 	case "UPDATE":
-		w.QueryUpdate(task.Data)
 	default:
 		return errors.New("Incorrect task type")
-	}
-	return nil
-}
-
-// Switch between possible data types
-func (w *Worker) QueryInsert(data any) error {
-	switch data.(type) {
-	case Account:
-		//
-	default:
-		return errors.New("Incorrect data type")
-	}
-	return nil
-}
-
-// Switch between possible data types
-func (w *Worker) QueryUpdate(data any) error {
-	switch data.(type) {
-	case Account:
-		//
-	default:
-		return errors.New("Incorrect data type")
 	}
 	return nil
 }

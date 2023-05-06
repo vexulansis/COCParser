@@ -29,9 +29,7 @@ func (w *Worker) Start() {
 			w.Pool.Manager.Received.Add(1)
 			w.Pool.WG.Add(1)
 			err := w.Process(msg)
-			if err == nil {
-				w.Pool.Manager.Processed.Add(1)
-			} else {
+			if err != nil {
 				w.Pool.Error(err)
 			}
 		case <-w.Quit:
@@ -43,6 +41,7 @@ func (w *Worker) Start() {
 // Task processing logic core
 func (w *Worker) Process(msg []byte) error {
 	defer w.Pool.WG.Done()
+	defer w.Pool.Manager.Processed.Add(1)
 	task := Message{}
 	err := json.Unmarshal(msg, &task)
 	if err != nil {
@@ -59,23 +58,8 @@ func (w *Worker) Process(msg []byte) error {
 	}
 	return nil
 }
+
+// Stops operating
 func (w *Worker) Stop() {
 	w.Quit <- true
-}
-func (w *Worker) InsertAccount(acc Account) {
-	w.Pool.DB.Exec(InsertAccountQuery,
-		acc.ID,
-		acc.Email,
-		acc.Password)
-}
-
-//	func (w *Worker) InsertClan(clan Clan) {
-//		w.Pool.DB.Exec(InsertClanQuery, ...)
-//	}
-//
-//	func (w *Worker) InsertPlayer(player Player){
-//		w.Pool.DB.Exec(InsertPlayerQuery, ...)
-//	}
-func (w *Worker) Login(acc Account) {
-
 }

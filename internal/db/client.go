@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/BurntSushi/toml"
 	_ "github.com/lib/pq"
 )
 
@@ -19,6 +20,15 @@ type DBConfig struct {
 	Port     int
 }
 
+func NewClient() *DBClient {
+	config := DBConfig{}
+	toml.DecodeFile("db.toml", &config)
+	db, _ := getDB(config)
+	return &DBClient{
+		DB:     db,
+		Config: config,
+	}
+}
 func getDB(config DBConfig) (*sql.DB, error) {
 	DBURI := getURI(config)
 	db, err := sql.Open("postgres", DBURI)

@@ -5,12 +5,20 @@ import (
 )
 
 type Broker struct {
-	Mutex        *sync.Mutex
-	Inputs       []*Conn
-	Outputs      []*Conn
-	Errors       []*Conn
+	// Mutex to avoid concurrent map RW
+	Mutex *sync.Mutex
+	// List of input channels
+	Inputs []*Conn
+	// List of output channels
+	Outputs []*Conn
+	// List of error channels
+	Errors []*Conn
+	// Staight path for fast access
 	ErrorHandler chan []byte
-	Config       map[int][]int
+	// Map type [inputID]: [outputID...]
+	Config map[int][]int
+	// Channel to stop the Broker
+	Quit chan bool
 }
 type Conn struct {
 	Port    int
@@ -20,7 +28,13 @@ type Conn struct {
 // Creating new Broker with connection to ErrorHandler
 func NewBroker(errorHandler chan []byte) *Broker {
 	return &Broker{
+		Mutex:        &sync.Mutex{},
+		Inputs:       []*Conn{},
+		Outputs:      []*Conn{},
+		Errors:       []*Conn{},
 		ErrorHandler: errorHandler,
+		Config:       make(map[int][]int),
+		Quit:         make(chan bool),
 	}
 }
 
@@ -34,12 +48,17 @@ func (b *Broker) Start() {
 				select {
 				case msg := <-err.Channel:
 					b.ErrorHandler <- msg
-				default:
-
+				case <-b.Quit:
+					return
 				}
 			}
 		}
 	}
+}
+
+// Stops operating and benchmarking
+func (b *Broker) Stop() {
+	b.Quit <- true
 }
 
 // Connecting to Broker input, returning port
@@ -70,14 +89,14 @@ func (b *Broker) ConnectOutput(output chan []byte) int {
 }
 
 // Connecting error channel, fan in into ErrorHandler
-func (b *Broker) ConnectError(err chan []byte) {
+func (b *Broker) ConnectError(err chan []byte) int {
 	port := len(b.Errors)
 	conn := &Conn{
 		Port:    port,
 		Channel: err,
 	}
 	b.Errors = append(b.Errors, conn)
-	return
+	return port
 }
 
 // Connecting input and output
@@ -102,7 +121,7 @@ func (b *Broker) RouteInput(inputID int) {
 				for _, outputID := range outputs {
 					b.Outputs[outputID].Channel <- msg
 				}
-			default:
+			case <-b.Quit:
 				return
 			}
 		}
