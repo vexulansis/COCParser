@@ -3,6 +3,7 @@ package pool
 import (
 	"database/sql"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -19,85 +20,46 @@ type Pool struct {
 	DB *sql.DB
 	// http.Client pointer to send requests
 	Client *resty.Client
+	// Current state
+	Current atomic.Uint64
+	// Tracking workers
+	WG *sync.WaitGroup
+	// Inputs to connect
+	Inputs []chan []byte
+	// ErrorHanlder channel
+	Error chan []byte
 	// WorkerPool
 	Workers []*Worker
-	// Task counter
-	WG *sync.WaitGroup
-	// Channel with Broker port ID to listen to
-	Input *Conn
-	// Channel with Broker port ID to send results
-	Output *Conn
-	// Channel with Broker port ID to send errors
-	Errors *Conn
-	// Identify if Pool is ready to operate
-	Ready bool
-	// Channel to stop the Pool
-	Quit chan bool
 }
 
-// New Pool example, call Prepare() before Start()
 func NewPool(name string, size int) *Pool {
-	pool := &Pool{
+	return &Pool{
 		Name:    name,
 		Size:    size,
+		Manager: NewPoolManager(name),
 		WG:      &sync.WaitGroup{},
 		Workers: []*Worker{},
-		Input: &Conn{
-			Channel: make(chan []byte),
-		},
-		Output: &Conn{
-			Channel: make(chan []byte),
-		},
-		Errors: &Conn{
-			Channel: make(chan []byte),
-		},
-		Quit: make(chan bool),
 	}
-	return pool
 }
-
-// Initializing Manager, connecting to Broker, creating Workers
-func (p *Pool) Prepare(broker *Broker) {
-	// Initializing Manager
-	p.Manager = NewPoolManager(p.Name)
-	// Connecting to Broker
-	p.Input.Port = broker.ConnectOutput(p.Input.Channel)
-	p.Output.Port = broker.ConnectInput(p.Output.Channel)
-	p.Errors.Port = broker.ConnectError(p.Errors.Channel)
-	// Creating workers
+func (p *Pool) ConnectGenerator(generator *Generator) {
+	p.Inputs = generator.Outputs
+}
+func (p *Pool) Prepare() {
 	for id := 0; id < p.Size; id++ {
 		w := NewWorker(id, p)
 		p.Workers = append(p.Workers, w)
 	}
 }
-
-// Connects DB if its necessary
-func (p *Pool) ConnectDB(db *sql.DB) {
-	p.DB = db
-}
-
-// Connects http.Client if its necessary
-func (p *Pool) ConnectHTTP(client *resty.Client) {
-	p.Client = client
-}
-
-// Starts operating and benchmarking
 func (p *Pool) Start() {
 	p.Manager.Time.Begin = time.Now()
+	p.WG.Add(len(p.Workers))
 	for _, w := range p.Workers {
 		go w.Start()
 	}
 }
-
-// Stops operating and benchmarking
 func (p *Pool) Stop() {
-	p.Manager.Time.End = time.Now()
 	for _, w := range p.Workers {
-		w.Stop()
+		go w.Stop()
 	}
-}
-
-// Wrapping and sending errors
-func (p *Pool) Error(err error) {
-	p.Errors.Channel <- Wrap(err)
+	p.Manager.Time.End = time.Now()
 }

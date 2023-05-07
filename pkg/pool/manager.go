@@ -36,7 +36,7 @@ func NewPoolManager(name string) *PoolManager {
 func (m *PoolManager) Benchmark() {
 	m.Time.Operated = m.Time.End.Sub(m.Time.Begin)
 	m.Speed = float64(m.Processed.Load()) / m.Time.Operated.Seconds()
-	m.Efficiency = float64(m.Received.Load()) / float64(m.Processed.Load()) * 100
+	m.Efficiency = float64(m.Processed.Load()) / float64(m.Received.Load()) * 100
 }
 
 // Format printing stats
