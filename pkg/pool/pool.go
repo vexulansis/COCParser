@@ -1,65 +1,98 @@
 package pool
 
 import (
-	"database/sql"
+	"context"
 	"sync"
-	"sync/atomic"
 	"time"
 
-	"github.com/go-resty/resty/v2"
+	. "github.com/vexulansis/COCParser/pkg/client"
+	. "github.com/vexulansis/COCParser/pkg/worker"
 )
 
 type Pool struct {
-	// Just to identify
-	Name string
-	// Balancing Pool size by limitting channel buffer
-	Size int
-	// Manager for benchmarking
+	Name    string
+	Config  *PoolConfig
 	Manager *PoolManager
-	// Database pointer to send queries
-	DB *sql.DB
-	// http.Client pointer to send requests
-	Client *resty.Client
-	// Current state
-	Current atomic.Uint64
-	// Tracking workers
-	WG *sync.WaitGroup
-	// Inputs to connect
-	Inputs []chan []byte
-	// ErrorHanlder channel
-	Error chan []byte
-	// WorkerPool
 	Workers []*Worker
+	WG      *sync.WaitGroup
+	Outputs []chan []byte
+	Inputs  []chan []byte
+}
+type PoolConfig struct {
+	Client  Client
+	Process ProcessFunc
+	Delay   int
 }
 
-func NewPool(name string, size int) *Pool {
-	return &Pool{
-		Name:    name,
-		Size:    size,
-		Manager: NewPoolManager(name),
-		WG:      &sync.WaitGroup{},
-		Workers: []*Worker{},
+// Creates Pool example
+func NewPool(name string, config *PoolConfig) *Pool {
+	pool := &Pool{
+		Name:   name,
+		Config: config,
+		WG:     &sync.WaitGroup{},
 	}
+	pool.Manager = NewPoolManager(pool)
+	return pool
 }
-func (p *Pool) ConnectGenerator(generator *Generator) {
-	p.Inputs = generator.Outputs
-}
-func (p *Pool) Prepare() {
-	for id := 0; id < p.Size; id++ {
-		w := NewWorker(id, p)
+
+// Creates workers and adds them to Pool
+func (p *Pool) AddWorkers(amount int) {
+	for id := 0; id < amount; id++ {
+		w := NewWorker(id, p.Config.Client, p.Config.Process, p.WG)
 		p.Workers = append(p.Workers, w)
+		p.Outputs = append(p.Outputs, w.Output)
+	}
+	p.Sanitize()
+	p.Deal()
+}
+
+// Connects outputs to Pool
+//
+// Reshuffles workers connections
+func (p *Pool) Connect(outputs []chan []byte) {
+	p.Inputs = append(p.Inputs, outputs...)
+	p.Sanitize()
+	p.Deal()
+}
+
+// Deals inputs to workers
+func (p *Pool) Deal() {
+	size := len(p.Workers)
+	for i, input := range p.Inputs {
+		id := i % size
+		p.Workers[id].Inputs = append(p.Workers[id].Inputs, input)
 	}
 }
-func (p *Pool) Start() {
+
+// Clears workers connections without deletion
+func (p *Pool) Sanitize() {
+	for _, w := range p.Workers {
+		w.Inputs = []chan []byte{}
+	}
+}
+
+// Disconnects all inputs
+func (p *Pool) Disconnect() {
+	p.Inputs = []chan []byte{}
+	p.Sanitize()
+}
+
+// Checks if Pool is ready to Start
+func (p *Pool) Ready() bool {
+	for _, w := range p.Workers {
+		if !w.Ready() {
+			return false
+		}
+	}
+	return true
+}
+
+// Starts Pool and PoolManager
+func (p *Pool) Start(ctx context.Context) {
 	p.Manager.Time.Begin = time.Now()
-	p.WG.Add(len(p.Workers))
+	go p.Manager.Start(ctx)
 	for _, w := range p.Workers {
-		go w.Start()
+		go w.Start(ctx)
 	}
-}
-func (p *Pool) Stop() {
-	for _, w := range p.Workers {
-		go w.Stop()
-	}
-	p.Manager.Time.End = time.Now()
+	p.WG.Wait()
 }
